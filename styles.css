@@ -598,6 +598,28 @@ input {
   line-height: 1.8;
 }
 
+.portrait-body {
+  display: grid;
+  gap: 12px;
+}
+
+.portrait-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.portrait-sub {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.portrait-dim,
+.portrait-map {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
 .list-block {
   padding-left: 18px;
 }

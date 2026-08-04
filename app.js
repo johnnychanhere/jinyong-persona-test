@@ -544,7 +544,7 @@ function renderEntry() {
               id="access-key-input"
               type="text"
               value="${escapeHtml(state.accessKey)}"
-              placeholder="例如：JY-WUXIA-8888"
+              placeholder="请输入购买后获得的口令"
               autocomplete="off"
               spellcheck="false"
             />
@@ -692,8 +692,20 @@ function renderResult() {
           </div>
           <div class="result-card">
             <h3>人物画像</h3>
-            <div class="result-body">
+            <div class="result-body portrait-body">
+              <p class="portrait-title">${escapeHtml(resultProfile.title)}</p>
+              <p class="portrait-sub">${escapeHtml(resultProfile.subtitle)}</p>
               <p>${escapeHtml(resultProfile.summary)}</p>
+              <p class="portrait-dim">主维度「${escapeHtml(quizData.dimensions[resultKey].name)}」：${escapeHtml(quizData.dimensions[resultKey].description)}</p>
+              <p class="portrait-dim">次维度「${escapeHtml(quizData.dimensions[secondary].name)}」：${escapeHtml(quizData.dimensions[secondary].tagline)}</p>
+              <p class="portrait-map">映射人物更接近：${escapeHtml(figureName)}。同类还有 ${escapeHtml(
+                (state.preference === "male"
+                  ? resultProfile.sampleFigures.male
+                  : state.preference === "female"
+                    ? resultProfile.sampleFigures.female
+                    : [...resultProfile.sampleFigures.female, ...resultProfile.sampleFigures.male]
+                ).filter((name) => name !== figureName).slice(0, 3).join("、")
+              )}。</p>
             </div>
           </div>
           <div class="result-card">
