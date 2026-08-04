@@ -1,20 +1,13 @@
 import { quizData } from "./quiz-data.js";
-import { ACCESS_KEYS } from "./access-keys.js";
 
 const STORAGE_KEYS = {
-  access: "jinyongPersonaAccessPassPersistentV1",
-  accessKey: "jinyongPersonaAccessKeyPersistentV1",
-  deviceId: "jinyongPersonaDeviceIdPersistentV1",
   progress: "jinyongPersonaQuizProgressV1",
   result: "jinyongPersonaLastResultV1",
   preference: "jinyongPersonaGender"
 };
 
 const state = {
-  authorized: readStorage(STORAGE_KEYS.access) === "ok",
-  stage: "entry",
-  accessKey: "",
-  message: "",
+  stage: "preference",
   preference: readStorage(STORAGE_KEYS.preference) || "female",
   questionIndex: 0,
   selectedOptionKey: "",
@@ -22,7 +15,6 @@ const state = {
   history: [],
   resultKey: "",
   shareCopied: false,
-  isUnlocking: false,
   posterPreviewUrl: "",
   posterFileName: "",
   posterHint: ""
@@ -59,25 +51,6 @@ function removeStorage(key) {
   }
 }
 
-function createDeviceId() {
-  try {
-    if (window.crypto?.randomUUID) {
-      return window.crypto.randomUUID();
-    }
-  } catch {
-    // Ignore and fall back.
-  }
-  return `device-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
-function getPersistentDeviceId() {
-  const saved = readStorage(STORAGE_KEYS.deviceId);
-  if (saved) return saved;
-  const nextId = createDeviceId();
-  writeStorage(STORAGE_KEYS.deviceId, nextId);
-  return nextId;
-}
-
 function parseJson(value) {
   if (!value) return null;
   try {
@@ -85,16 +58,6 @@ function parseJson(value) {
   } catch {
     return null;
   }
-}
-
-function normalizeAccessKey(value) {
-  return String(value || "")
-    .trim()
-    .toUpperCase()
-    .replaceAll("—", "-")
-    .replaceAll("–", "-")
-    .replaceAll("_", "-")
-    .replace(/\s+/g, "");
 }
 
 function sanitizeScores(input) {
@@ -150,12 +113,10 @@ function clearUrlSearch() {
 function restoreFromUrlOrStorage() {
   const urlState = readResultFromUrl();
   if (urlState) {
-    state.authorized = true;
     state.stage = "result";
     state.preference = urlState.preference;
     state.scores = urlState.scores;
     state.resultKey = computeResultKey(state.scores);
-    writeStorage(STORAGE_KEYS.access, "ok");
     writeStorage(
       STORAGE_KEYS.result,
       JSON.stringify({
@@ -169,7 +130,6 @@ function restoreFromUrlOrStorage() {
 
   const savedResult = parseJson(readStorage(STORAGE_KEYS.result));
   if (savedResult?.stage === "result" && savedResult.scores) {
-    state.authorized = true;
     state.stage = "result";
     state.preference = savedResult.preference || state.preference;
     state.scores = sanitizeScores(savedResult.scores);
@@ -179,7 +139,6 @@ function restoreFromUrlOrStorage() {
 
   const savedProgress = parseJson(readStorage(STORAGE_KEYS.progress));
   if (savedProgress?.stage === "quiz") {
-    state.authorized = true;
     state.stage = "quiz";
     state.preference = savedProgress.preference || state.preference;
     state.questionIndex = clamp(savedProgress.index, 0, quizData.questions.length - 1);
@@ -188,7 +147,7 @@ function restoreFromUrlOrStorage() {
     return;
   }
 
-  state.stage = state.authorized ? "preference" : "entry";
+  state.stage = "preference";
 }
 
 function persistProgress() {
@@ -488,15 +447,13 @@ function render({ animate = true } = {}) {
 function renderScreen({ animate }) {
   const screenClass = animate ? "screen screen-animated" : "screen";
   const mainScreen =
-    state.stage === "entry"
-      ? renderEntry()
-      : state.stage === "preference"
-        ? renderPreference()
-        : state.stage === "quiz"
-          ? renderQuiz()
-          : state.stage === "result"
-            ? renderResult()
-            : `<section class="screen"><div class="panel empty-state"><p class="eyebrow">Archive Lost</p><h1 class="section-title">页面状态未找到</h1></div></section>`;
+    state.stage === "preference"
+      ? renderPreference()
+      : state.stage === "quiz"
+        ? renderQuiz()
+        : state.stage === "result"
+          ? renderResult()
+          : `<section class="screen"><div class="panel empty-state"><p class="eyebrow">Archive Lost</p><h1 class="section-title">页面状态未找到</h1></div></section>`;
 
   const mainMarkup = mainScreen.replace('class="screen"', `class="${screenClass}"`);
   return `${mainMarkup}${renderPosterPreview()}`;
@@ -523,57 +480,13 @@ function renderPosterPreview() {
   `;
 }
 
-function renderEntry() {
-  return `
-    <section class="screen">
-      <div class="panel entry-layout">
-        <div>
-          <p class="eyebrow">Jin Yong Persona Archive</p>
-          <h1 class="title">你最像金庸江湖里哪位大侠/女侠？</h1>
-          <p class="lead">24 道情境题，快速映射你的决断风格、情绪处理方式和处世倾向。答完即可得到你的江湖人格档案与映射人物。</p>
-          <div class="footer-meta">纯前端版 ｜ 口令解锁 ｜ 可重复使用</div>
-        </div>
-        <div class="stack">
-          <div>
-            <p class="eyebrow">Access Gate</p>
-            <p class="muted">请输入口令验证后开始测试。口令长期有效，可重复使用；验证成功后会在本设备记住解锁状态。</p>
-          </div>
-          <div class="input-wrap">
-            <input
-              class="text-input"
-              id="access-key-input"
-              type="text"
-              value="${escapeHtml(state.accessKey)}"
-              placeholder="请输入购买后获得的口令"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <button class="primary-btn" id="unlock-btn" ${state.isUnlocking ? "disabled" : ""}>
-              ${state.isUnlocking ? "验证中..." : "验证并开始测试"}
-            </button>
-            <p class="message">${escapeHtml(state.message)}</p>
-          </div>
-          <div class="stat-card">
-            <h4>使用说明</h4>
-            <ul class="stat-list">
-              <li>购买后获得口令，输入即可开始测试。</li>
-              <li>同一设备验证一次后，刷新页面仍可继续。</li>
-              <li>结果可生成海报、复制分享链接。</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
 function renderPreference() {
   return `
     <section class="screen">
       <div class="panel">
-        <p class="eyebrow">第一步 · 江湖映射偏好</p>
-        <h2 class="section-title">选择你更有代入感的人物方向</h2>
-        <p class="lead">这一步只影响结果页优先展示的人物名字，不影响答题内容和分数计算。</p>
+        <p class="eyebrow">Jin Yong Persona Archive</p>
+        <h2 class="section-title">你最像金庸江湖里哪位大侠/女侠？</h2>
+        <p class="lead">24 道情境题，测出你的江湖人格。先选一个更有代入感的人物方向（只影响结果页展示，不影响打分）。</p>
         <div class="pref-grid" style="margin-top: 28px;">
           ${renderPreferenceCard("female", "女侠优先", "优先匹配金庸女侠人物")}
           ${renderPreferenceCard("male", "大侠优先", "优先匹配金庸大侠人物")}
@@ -795,20 +708,6 @@ function bindEvents() {
     });
   });
 
-  if (state.stage === "entry") {
-    const input = document.querySelector("#access-key-input");
-    input?.addEventListener("input", (event) => {
-      state.accessKey = event.target.value.toUpperCase();
-    });
-    input?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !state.isUnlocking) {
-        unlock();
-      }
-    });
-    document.querySelector("#unlock-btn")?.addEventListener("click", unlock);
-    return;
-  }
-
   if (state.stage === "preference") {
     document.querySelectorAll("[data-preference]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -891,15 +790,11 @@ function bindEvents() {
   if (state.stage === "result") {
     document.querySelector("#restart-btn")?.addEventListener("click", () => {
       const keepPreference = state.preference;
-      const keepAccessKey = state.accessKey || readStorage(STORAGE_KEYS.accessKey) || "";
       clearPosterPreview();
-      state.authorized = Boolean(readStorage(STORAGE_KEYS.access) === "ok");
-      state.stage = state.authorized ? "preference" : "entry";
+      state.stage = "preference";
       state.preference = keepPreference;
       state.questionIndex = 0;
       state.selectedOptionKey = "";
-      state.accessKey = keepAccessKey;
-      state.message = "";
       state.scores = createEmptyScores();
       state.history = [];
       state.resultKey = "";
@@ -939,39 +834,6 @@ function bindEvents() {
       state.shareCopied = success;
       render({ animate: false });
     });
-  }
-}
-
-async function unlock() {
-  const normalized = normalizeAccessKey(state.accessKey);
-  if (!normalized) {
-    state.message = "请输入口令。";
-    render({ animate: false });
-    return;
-  }
-
-  state.accessKey = normalized;
-  state.isUnlocking = true;
-  state.message = "";
-  render({ animate: false });
-
-  try {
-    getPersistentDeviceId();
-    const validKeys = ACCESS_KEYS.map(normalizeAccessKey);
-    if (!validKeys.includes(normalized)) {
-      throw new Error("口令无效，请检查后重试。");
-    }
-
-    state.authorized = true;
-    state.stage = "preference";
-    state.message = "";
-    writeStorage(STORAGE_KEYS.access, "ok");
-    writeStorage(STORAGE_KEYS.accessKey, normalized);
-  } catch (error) {
-    state.message = error instanceof Error ? error.message : "验证失败，请重试。";
-  } finally {
-    state.isUnlocking = false;
-    render();
   }
 }
 
